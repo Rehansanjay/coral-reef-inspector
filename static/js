@@ -1,0 +1,174 @@
+document.addEventListener('DOMContentLoaded', () => {
+    
+    // --- 1. TEMPERATURE SLIDER FIX ---
+    const tempInput = document.getElementById('temperature');
+    const tempDisplay = document.getElementById('temp-display');
+    
+    // Force update on load
+    tempDisplay.textContent = tempInput.value + "°C";
+
+    // Update on slide
+    tempInput.addEventListener('input', (e) => {
+        tempDisplay.textContent = e.target.value + "°C";
+    });
+
+
+    // --- 2. DRAG & DROP FIX ---
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const fileName = document.getElementById('fileName');
+
+    // Click triggers file select
+    dropZone.addEventListener('click', () => fileInput.click());
+
+    // File selected via Click
+    fileInput.addEventListener('change', () => {
+        if (fileInput.files.length) updateFileUI(fileInput.files[0]);
+    });
+
+    // Drag Over Effect
+    dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault(); // Stop browser from opening file
+        dropZone.classList.add('highlight');
+    });
+
+    // Drag Leave Effect
+    dropZone.addEventListener('dragleave', () => {
+        dropZone.classList.remove('highlight');
+    });
+
+    // DROP Event (The missing piece!)
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('highlight');
+
+        if (e.dataTransfer.files.length) {
+            fileInput.files = e.dataTransfer.files; // Assign dropped file to input
+            updateFileUI(e.dataTransfer.files[0]);
+        }
+    });
+
+    function updateFileUI(file) {
+        fileName.textContent = "📂 " + file.name;
+        fileName.style.color = "var(--primary)";
+    }
+
+
+    // --- 3. ANALYSIS LOGIC ---
+    const form = document.getElementById('analysisForm');
+    const loader = document.getElementById('loader');
+    const resultCard = document.getElementById('resultCard');
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        if(!fileInput.files[0]) {
+            alert("⚠️ Please upload a coral image first!");
+            return;
+        }
+
+        loader.style.display = 'flex';
+        
+        try {
+            const formData = new FormData(form);
+            const response = await fetch('/analyze', { method: 'POST', body: formData });
+            const data = await response.json();
+
+            if(data.error) {
+                alert("Error: " + data.error);
+            } else {
+                showResults(data);
+            }
+        } catch (err) {
+            console.error(err);
+            alert("Server Error. Is app.py running?");
+        } finally {
+            loader.style.display = 'none';
+        }
+    });
+
+    function showResults(data) {
+        resultCard.style.display = 'block';
+        
+        // Image & Text
+        document.getElementById('resultImage').src = data.image_url;
+        document.getElementById('resultCondition').textContent = data.prediction;
+        document.getElementById('resultConfidence').textContent = (data.confidence * 100).toFixed(1) + "%";
+
+        // Status Pill Color
+        const pill = document.getElementById('statusPill');
+        pill.textContent = data.prediction.toUpperCase();
+        pill.className = `status-pill ${data.prediction}`;
+
+        // Scroll to result
+        resultCard.scrollIntoView({ behavior: 'smooth' });
+
+        // Generate Bars
+        generateBars(data.prediction);
+    }
+
+    function generateBars(prediction) {
+        const container = document.getElementById('parameterContainer');
+        const isHealthy = prediction === 'Healthy';
+        
+        // Random stats generator for visual effect
+        const stats = [
+            { name: "Algae Density", val: isHealthy ? rdm(75,98) : rdm(10,40) },
+            { name: "Tissue Integrity", val: isHealthy ? rdm(80,100) : rdm(20,50) },
+            { name: "Calcification", val: isHealthy ? rdm(60,90) : rdm(10,30) }
+        ];
+
+        let html = ``;
+        stats.forEach(s => {
+            const colorClass = s.val > 50 ? 'fill-green' : 'fill-red';
+            html += `
+                <div class="param-row">
+                    <div style="display:flex; justify-content:space-between; font-size:0.8rem; color:#94a3b8;">
+                        <span>${s.name}</span>
+                        <span>${s.val}%</span>
+                    </div>
+                    <div class="progress-track">
+                        <div class="progress-fill ${colorClass}" style="width: ${s.val}%"></div>
+                    </div>
+                </div>
+            `;
+        });
+        container.innerHTML = html;
+    }
+
+    function rdm(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+
+    // --- 4. CHATBOT ---
+    window.toggleChat = () => {
+        const win = document.getElementById('chatWindow');
+        win.style.display = (win.style.display === 'flex') ? 'none' : 'flex';
+    };
+
+    window.sendChat = () => {
+        const input = document.getElementById('chatInput');
+        const text = input.value.trim();
+        if(!text) return;
+        
+        addMsg(text, 'user');
+        input.value = '';
+
+        setTimeout(() => {
+            let reply = "I analyze coral health based on color and texture.";
+            if(text.toLowerCase().includes('temp')) reply = "Corals prefer 23-29°C. Higher temps cause bleaching.";
+            else if(text.toLowerCase().includes('bleach')) reply = "Bleaching is a stress response where algae leaves the coral.";
+            else if(text.toLowerCase().includes('aura')) reply = "Rehansanjay radiates aura ✨";
+            else if(text.toLowerCase().includes('vijay')) reply = "Vj <- Sp <- Sk (The Hierarchy).";
+            
+            addMsg(reply, 'bot');
+        }, 600);
+    };
+
+    function addMsg(text, type) {
+        const body = document.getElementById('chatBody');
+        const div = document.createElement('div');
+        div.className = `msg ${type}`;
+        div.textContent = text;
+        body.appendChild(div);
+        body.scrollTop = body.scrollHeight;
+    }
+});
